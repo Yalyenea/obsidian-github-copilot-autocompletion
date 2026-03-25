@@ -1,6 +1,6 @@
 {
 	"id": "github-copilot",
-	"name": "GitHub Copilot",
+	"name": "GitHub Copilot Autocomplete",
 	"version": "1.2.2",
 	"minAppVersion": "1.5.12",
 	"description": "GitHub Copilot inline autocompletion for Obsidian",

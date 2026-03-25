@@ -1,5 +1,5 @@
 {
-	"name": "obsidian-github-copilot",
+	"name": "obsidian-github-copilot-autocomplete",
 	"version": "1.2.2",
 	"description": "GitHub Copilot inline autocompletion for Obsidian",
 	"main": "main.js",
