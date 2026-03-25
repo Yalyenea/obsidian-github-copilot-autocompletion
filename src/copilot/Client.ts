@@ -107,8 +107,8 @@ class Client {
 		});
 	}
 
-	public async checkStatus(): Promise<void> {
-		await this.client.customRequest("checkStatus", {
+	public async checkStatus(): Promise<any> {
+		return this.client.customRequest("checkStatus", {
 			localChecksOnly: false,
 		});
 	}

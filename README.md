@@ -1,118 +1,117 @@
-# Obsidian GitHub Copilot Plugin
+# Obsidian GitHub Copilot Autocomplete
 
-![Obsidian plugin](https://img.shields.io/endpoint?url=https://scambier.xyz/obsidian-endpoints/github-copilot.json)
-![GitHub release (latest by date including pre-releases)](https://img.shields.io/github/v/release/pierrad/obsidian-github-copilot)
+An Obsidian plugin fork focused on one job: GitHub Copilot inline autocompletion.
 
-Use **GitHub Copilot** in the Obsidian editor. This plugin is a bridge between the Obsidian editor and the GitHub Copilot service.
+This fork removes chat and keeps the plugin centered on editor-native completion, with input behavior tuned for Obsidian writing flows and plugins such as LaTeX Suite.
 
-- 🤖 Get inline suggestion as you type using GitHub Copilot service
-- 💬 Use the GitHub Copilot Chat service to ask questions about your notes
+## What Changed In This Fork
 
-## 🗒️ Requirements
+- Removed Copilot Chat and related UI, settings, and dependencies
+- Kept GitHub Copilot sign-in inside the plugin settings
+- Switched the primary accept flow away from `Tab`
+- Added editor-style inline actions:
+  - `Right Arrow` accepts the full suggestion
+  - `Alt-Right` accepts the next word
+  - `Alt-ArrowDown` and `Alt-ArrowUp` cycle through multiple suggestions
+  - `Escape` dismisses the suggestion
+- Preserved optional secondary hotkeys for users who still want custom bindings
 
-- A GitHub Copilot subscription (https://copilot.github.com/)
-- Network connection to send and receive data from the GitHub Copilot service
+## Why
 
-## ⚙️ Installation
+In Obsidian, `Tab` is already overloaded by core editor behavior and community plugins. The most obvious conflict is formula editing with LaTeX Suite, where stealing `Tab` makes completion feel worse, not better.
 
-1. Install the plugin via the Obsidian community plugins browser.
-2. Activate the plugin in the settings. Make sure to configure any necessary options.
+This fork treats inline completion as ghost text first, shortcut-driven second.
 
-## 🤖 GitHub Copilot Inline
+## Requirements
 
-![https://github.com/Pierrad/obsidian-github-copilot/tree/master/.github/assets/example.gif](https://github.com/Pierrad/obsidian-github-copilot/blob/master/.github/assets/example.gif)
-
-### Requirements
-
+- Obsidian desktop
+- A GitHub Copilot subscription
 - Node.js 22 or later
+- Network access to GitHub Copilot
 
-### Installation
+## Installation
 
-1. Once installed, go to the plugin settings and enter the path to the Node +22 binary. You can find it by running `which node` in your terminal.
-2. Either
-   1. A modal will appear asking you to sign in to Copilot. Follow the instructions to sign in.
-   2. Or, you will receive a notice saying that Copilot is ready to use. (This will happen if you have already signed in to Copilot in the past in IDEs)
+### Community plugin style install
 
-> [!NOTE]  
-> If you install the plugin by cloning it or downloading the release files from GitHub, you will need to name the plugin folder `github-copilot` for the plugin to work.
+1. Copy the plugin into your vault under:
+   `.obsidian/plugins/github-copilot`
+2. Make sure these files exist:
+   - `manifest.json`
+   - `main.js`
+   - `styles.css`
+3. Enable the plugin in Obsidian.
 
+> If you install manually, keep the plugin folder name as `github-copilot`, because the current manifest id is still `github-copilot`.
 
-### Usage
+## First-Time Setup
 
-1. Open a note in Obsidian. 
-2. Write something in the editor.
-3. After a small pause, Copilot will suggest completions for your text.
-4. Press `Tab` to accept a suggestion or `Esc` to dismiss it.
+1. Open the plugin settings in Obsidian.
+2. Set your Node.js binary path.
+   - Example on macOS with Homebrew: `/opt/homebrew/bin/node`
+3. Click `Test the path`.
+4. Click `Sign in to Copilot`.
 
-### Features
+If you already signed in through another Copilot client on the same machine, the plugin may detect that and skip the full device-code flow.
 
-- [x] Use GitHub Copilot in the Obsidian editor
-- [x] Configure the suggestion generation delay
-- [x] Configure your bindings to accept, dismiss, trigger or partially accept suggestions
-- [x] Configure if you want to see automatic suggestions or only trigger them manually
-- [x] Configure if you want to see suggestion only in code blocks or in the whole note 
-- [x] Exclude folders and files from the suggestion generation 
+## Inline Completion Behavior
 
-### Known issues
+The built-in interaction model is:
 
-- If you installed Obsidian with Flatpak, you might need to use NVM to handle Node.js versions as the default binary path is not accessible in the Flatpak sandbox. See [this issue](https://github.com/Pierrad/obsidian-github-copilot/issues/6) for more information.
-- "Tab" completion can be buggy in some cases (e.g. in bullet points in LateX Math mode for example). It depends on plugin priority over the keybindings. See [this issue](https://github.com/Pierrad/obsidian-github-copilot/issues/38) for more information. 
+- `Right Arrow`: accept the visible suggestion
+- `Alt-Right`: accept the next word
+- `Alt-ArrowDown`: next suggestion
+- `Alt-ArrowUp`: previous suggestion
+- `Escape`: dismiss the suggestion
 
+When you continue typing characters that match the current suggestion prefix, the ghost text stays alive and shrinks forward instead of disappearing immediately.
 
-## 💬 GitHub Copilot Chat
+This is the default experience. Optional hotkeys in settings are secondary shortcuts layered on top.
 
-https://github.com/user-attachments/assets/89089920-45de-47c3-80b1-f2d58d1ba55e
+## Settings
 
-### Installation
+The plugin keeps a small settings surface:
 
-- Once installed, you can find the GitHub Copilot Chat in the right sidebar of Obsidian.
-- It should ask you to sign in to GitHub Copilot. Follow the instructions to sign in.
+- Enable or disable Copilot
+- Node binary path
+- Suggestion delay
+- Manual-only completion mode
+- Code-block-only completion mode
+- Excluded files and folders
+- Proxy and extra CA certificates
+- Optional secondary hotkeys
+- Sign in and sign out
 
-### Usage
+## LaTeX Suite Compatibility
 
-- Open the GitHub Copilot Chat in the right sidebar.
-- Choose a model to use (e.g. `gpt-4` or `claude 3.7`).
-- Ask a question and like a note like you would do in the obsidian editor (e.g. `Can you summarize this note [[my note]]?`).
+This fork is intentionally designed to avoid using `Tab` as the primary accept key.
 
-### Features
+That means:
 
-- [x] Use GitHub Copilot Chat in the Obsidian editor
-- [x] Choose the model to use between all models available in the GitHub Copilot Chat service
-- [x] Implement a chat history
-- [x] Link notes with [[double bracket syntax]] in the chat
-- [x] Configure a custom prompt as a system message in the settings
-- [x] Let the user choose the default behavior of the enter key (send message or add a new line)
-- [x] **Mermaid diagram support** - Render Mermaid diagrams in chat responses
-- [ ] Stream the response from the API
-  - Waiting for requestUrl to implement Streaming : https://forum.obsidian.md/t/support-streaming-the-request-and-requesturl-response-body/87381
+- LaTeX Suite can keep using `Tab` for snippet expansion
+- Obsidian can keep its normal indentation and editor behavior
+- Copilot completion remains available through arrow-based inline actions
 
-### Mermaid Diagrams
+If you want to bind accept back to `Tab`, you still can, but that reintroduces the same collision this fork is trying to avoid.
 
-The chat supports rendering Mermaid diagrams when GitHub Copilot responds with Mermaid code blocks. Simply ask Copilot to create a diagram and it will render visually in the chat.
+## Development
 
-**Example usage:**
-```
-You: Can you create a flowchart showing the software development lifecycle?
-
-Copilot: Here's a flowchart of the software development lifecycle:
-
-```mermaid
-flowchart TD
-    A[Requirements Analysis] --> B[Design]
-    B --> C[Implementation]
-    C --> D[Testing]
-    D --> E[Deployment]
-    E --> F[Maintenance]
-    F --> A
+```bash
+npm install
+npm run build
 ```
 
-**Supported diagram types:**
-- Flowcharts
-- Sequence diagrams
-- Class diagrams
-- State diagrams
-- Gantt charts
-- Pie charts
-- And more...
+Useful scripts:
 
-The diagrams automatically adapt to your Obsidian theme (light/dark mode) and are fully integrated into the chat interface.
+- `npm run dev`: rebuild in watch mode
+- `npm run build`: type-check and build production output
+
+## Project Scope
+
+This fork is intentionally narrow.
+
+It is not trying to be a full Copilot surface inside Obsidian. The goal is to make inline completion feel predictable, lightweight, and compatible with real note-taking workflows.
+
+## Credits
+
+- Original project: [Pierrad/obsidian-github-copilot](https://github.com/Pierrad/obsidian-github-copilot)
+- This repository is a fork focused on autocomplete-only behavior

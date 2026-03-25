@@ -1,4 +1,4 @@
-import { Notice, Plugin, WorkspaceLeaf } from "obsidian";
+import { Notice, Plugin } from "obsidian";
 
 import EventManager from "./events/EventManager";
 import CopilotAgent from "./copilot/CopilotAgent";
@@ -12,8 +12,6 @@ import Vault from "./helpers/Vault";
 import File from "./helpers/File";
 import Logger from "./helpers/Logger";
 import Cacher from "./copilot/Cacher";
-import ChatView from "./copilot-chat/views/ChatView";
-import { CHAT_VIEW_TYPE } from "./copilot-chat/types/constants";
 import github from "./config/github";
 
 export default class CopilotPlugin extends Plugin {
@@ -37,40 +35,7 @@ export default class CopilotPlugin extends Plugin {
 
 		this.tabSize = Vault.getTabSize(this.app);
 
-		// Recreate or update the copilot folder and artifacts from the bundle
-		if (
-			!File.doesFolderExist(Vault.getCopilotPath(this.app, this.version))
-		) {
-			await File.createFolder(
-				Vault.getCopilotPath(this.app, this.version),
-			);
-
-			await File.downloadFile(
-				github.RELEASE_URL(this.version),
-				Vault.getCopilotPath(this.app, this.version) + ".zip",
-				(err) => {
-					if (err) {
-						Logger.getInstance().log(`Download failed: ${err}`);
-					} else {
-						Logger.getInstance().log("Download finished.");
-						File.unzipFile(
-							Vault.getCopilotPath(this.app, this.version) +
-								".zip",
-							Vault.getCopilotPath(this.app, this.version),
-						);
-						File.removeFile(
-							Vault.getCopilotPath(this.app, this.version) +
-								".zip",
-						);
-					}
-				},
-			);
-
-			await File.removeOldCopilotFolders(
-				this.version,
-				Vault.getPluginPath(this.app),
-			);
-		}
+		await this.ensureLanguageServerInstalled();
 
 		if (
 			this.settings.nodePath === DEFAULT_SETTINGS.nodePath ||
@@ -109,49 +74,45 @@ export default class CopilotPlugin extends Plugin {
 			);
 		}
 
-		this.registerView(CHAT_VIEW_TYPE, (leaf) => new ChatView(leaf, this));
-		if (this.settings.openChatOnStartup) {
-			this.activateView();
-		}
-
-		this.addCommand({
-			id: "open-copilot-chat",
-			name: "Open Copilot Chat",
-			callback: () => {
-				this.activateView();
-				const leaves =
-					this.app.workspace.getLeavesOfType(CHAT_VIEW_TYPE);
-				if (leaves.length > 0) {
-					this.app.workspace.revealLeaf(leaves[0]);
-				}
-			},
-		});
 	}
 
 	onunload() {
 		this.copilotAgent?.stopAgent();
 		this.statusBar = null;
-		this.deactivateView();
 	}
 
-	async activateView(): Promise<void> {
-		const { workspace } = this.app;
+	private async ensureLanguageServerInstalled() {
+		const agentPath = Vault.getAgentPath(this.app, this.version);
+		const copilotPath = Vault.getCopilotPath(this.app, this.version);
+		const zipPath = `${copilotPath}.zip`;
 
-		let leaf: WorkspaceLeaf | null = null;
-		const leaves = workspace.getLeavesOfType(CHAT_VIEW_TYPE);
-		if (leaves.length > 0) {
-			leaf = leaves[0];
-		} else {
-			leaf = workspace.getRightLeaf(false);
-			await leaf?.setViewState({ type: CHAT_VIEW_TYPE, active: true });
-		}
-		if (!leaf) {
-			Logger.getInstance().error("Failed to create chat view.");
+		if (File.readFileSync(agentPath) !== "") {
 			return;
 		}
-	}
 
-	async deactivateView() {
-		this.app.workspace.detachLeavesOfType(CHAT_VIEW_TYPE);
+		await File.createFolder(copilotPath);
+
+		await new Promise<void>((resolve) => {
+			File.downloadFile(github.RELEASE_URL(this.version), zipPath, (err) => {
+				if (err) {
+					Logger.getInstance().log(`Download failed: ${err}`);
+					new Notice(
+						"[GitHub Copilot] Failed to download the Copilot language server. Remove the empty copilot folder or retry later.",
+					);
+					resolve();
+					return;
+				}
+
+				Logger.getInstance().log("Download finished.");
+				File.unzipFile(zipPath, copilotPath);
+				File.removeFile(zipPath);
+				resolve();
+			});
+		});
+
+		await File.removeOldCopilotFolders(
+			this.version,
+			Vault.getPluginPath(this.app),
+		);
 	}
 }

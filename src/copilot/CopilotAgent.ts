@@ -5,7 +5,6 @@ import { EditorView } from "@codemirror/view";
 
 import CopilotPlugin from "../main";
 import { SettingsObserver } from "../settings/CopilotPluginSettingTab";
-import AuthModal from "../modal/AuthModal";
 import Vault from "../helpers/Vault";
 import Logger from "../helpers/Logger";
 import Json from "../helpers/Json";
@@ -16,9 +15,11 @@ import { InlineSuggestionEffect } from "../extensions/InlineSuggestionState";
 
 class CopilotAgent implements SettingsObserver {
 	private plugin: CopilotPlugin;
-	private client: Client;
-	private agent: ChildProcessWithoutNullStreams;
+	private client: Client | null = null;
+	private agent: ChildProcessWithoutNullStreams | null = null;
 	private agentPath: string;
+	private authenticationStatus: "unknown" | "signedIn" | "signedOut" =
+		"unknown";
 
 	constructor(plugin: CopilotPlugin) {
 		this.plugin = plugin;
@@ -29,52 +30,74 @@ class CopilotAgent implements SettingsObserver {
 	}
 
 	public getAgent(): ChildProcessWithoutNullStreams {
-		return this.agent;
+		return this.agent as ChildProcessWithoutNullStreams;
+	}
+
+	public isReady(): boolean {
+		return !!this.agent && !!this.client;
+	}
+
+	public setAuthenticationStatus(status: "unknown" | "signedIn" | "signedOut") {
+		this.authenticationStatus = status;
+	}
+
+	public getAuthenticationStatusLabel(): string {
+		switch (this.authenticationStatus) {
+			case "signedIn":
+				return "Signed in";
+			case "signedOut":
+				return "Signed out";
+			default:
+				return "Unknown";
+		}
 	}
 
 	public getClient(): Client {
 		if (!this.client) {
 			new Notice("Copilot is not ready yet! Please check your settings.");
 		}
-		return this.client;
+		return this.client as Client;
 	}
 
 	public async setup(): Promise<void> {
+		const wasReady = this.isReady();
+		await this.stopAgent();
 		this.startAgent();
 		this.setupListeners();
 		await this.configureClient();
-		await this.trySignIn();
-		new Notice("Copilot is ready!");
+		await this.refreshAuthenticationStatus();
+		if (!wasReady) {
+			new Notice("Copilot is ready!");
+		}
 		return Promise.resolve();
 	}
 
 	public startAgent(): void {
 		try {
+			const env = {
+				...process.env,
+				...(this.plugin.settings.proxy.startsWith("http://")
+					? { HTTP_PROXY: this.plugin.settings.proxy }
+					: {}),
+				...(this.plugin.settings.proxy.startsWith("https://")
+					? { HTTPS_PROXY: this.plugin.settings.proxy }
+					: {}),
+				...(this.plugin.settings.extraCACerts &&
+				this.plugin.settings.extraCACerts.trim() !== ""
+					? {
+							NODE_EXTRA_CA_CERTS:
+								this.plugin.settings.extraCACerts.trim(),
+						}
+					: {}),
+			};
+
 			this.agent = spawn(
 				File.wrapFilePath(this.plugin.settings.nodePath),
 				[File.wrapFilePath(this.agentPath), "--stdio"],
 				{
 					shell: true,
 					stdio: "pipe",
-					...(this.plugin.settings.proxy && {
-						env: {
-							...(this.plugin.settings.proxy.startsWith("http://")
-								? { HTTP_PROXY: this.plugin.settings.proxy }
-								: {}),
-							...(this.plugin.settings.proxy.startsWith(
-								"https://",
-							)
-								? { HTTPS_PROXY: this.plugin.settings.proxy }
-								: {}),
-							...(this.plugin.settings.extraCACerts &&
-							this.plugin.settings.extraCACerts.trim() !== ""
-								? {
-										NODE_EXTRA_CA_CERTS:
-											this.plugin.settings.extraCACerts.trim(),
-									}
-								: {}),
-						},
-					}),
+					env,
 				},
 			);
 		} catch (error) {
@@ -82,14 +105,29 @@ class CopilotAgent implements SettingsObserver {
 		}
 	}
 
-	// Force sign in at startup for issue : https://github.com/Pierrad/obsidian-github-copilot/issues/36
-	public async trySignIn(): Promise<void> {
-		return await this.client.initiateSignIn().then((res) => {
+	public async refreshAuthenticationStatus(): Promise<void> {
+		try {
+			const res = await this.getClient().checkStatus();
+			const status =
+				typeof res?.status === "string"
+					? res.status
+					: typeof res?.result?.status === "string"
+						? res.result.status
+						: null;
+
+			if (status === "OK" || status === "AlreadySignedIn") {
+				this.authenticationStatus = "signedIn";
+			} else if (status === "NotSignedIn") {
+				this.authenticationStatus = "signedOut";
+			} else {
+				this.authenticationStatus = "unknown";
+			}
+		} catch (error) {
 			Logger.getInstance().log(
-				"Try to sign in at copilot startup : " + JSON.stringify(res),
+				`Failed to refresh authentication status: ${error}`,
 			);
-			return res;
-		});
+			this.authenticationStatus = "unknown";
+		}
 	}
 
 	public async configureClient() {
@@ -98,28 +136,29 @@ class CopilotAgent implements SettingsObserver {
 	}
 
 	public stopAgent(): Promise<void> {
-		if (this.agent) this.agent.kill();
-		if (this.client) this.client.dispose();
+		if (this.client) {
+			this.client.dispose();
+			this.client = null;
+		}
+		if (this.agent) {
+			this.agent.kill();
+			this.agent = null;
+		}
 		return Promise.resolve();
 	}
 
 	public setupListeners(): void {
-		this.agent.stdout.on("data", (data) => {
+		this.getAgent().stdout.on("data", (data) => {
 			Logger.getInstance().log(`stdout: ${data}`);
 			if (data.toString().includes("NotSignedIn")) {
+				this.authenticationStatus = "signedOut";
 				const jsonObjects = Json.splitJsonObjects(data.toString());
 				for (const jsonObjectString of jsonObjects) {
 					const json = Json.extractJsonObject(
 						jsonObjectString,
 					) as CopilotResponse;
 					if (json?.result?.status === "NotSignedIn") {
-						this.client.initiateSignIn().then((res) => {
-							new AuthModal(
-								this.plugin,
-								res.userCode,
-								res.verificationUri,
-							).open();
-						});
+						break;
 					}
 				}
 			} else if (data.toString().includes("DocumentVersionMismatch")) {
@@ -127,12 +166,13 @@ class CopilotAgent implements SettingsObserver {
 			}
 		});
 
-		this.agent.stderr.on("data", (data) => {
+		this.getAgent().stderr.on("data", (data) => {
 			Logger.getInstance().error(`stderr: ${data}`);
 		});
 
-		this.agent.on("exit", (code) => {
+		this.getAgent().on("exit", (code) => {
 			Logger.getInstance().log(`child process exited with code ${code}`);
+			this.authenticationStatus = "unknown";
 			new Notice("Copilot has stopped.");
 		});
 	}
@@ -142,7 +182,7 @@ class CopilotAgent implements SettingsObserver {
 		params: GetCompletionsParams,
 	): Promise<void> {
 		this.plugin.statusBar?.updateElement(true);
-		const res = await this.client.completion(params);
+		const res = await this.getClient().completion(params);
 		this.plugin.statusBar?.updateElement();
 
 		if (res && res.items && res.items.length > 0) {
@@ -164,6 +204,7 @@ class CopilotAgent implements SettingsObserver {
 	async onSettingsUpdate(): Promise<void> {
 		if (await this.plugin.settingsTab.isCopilotEnabledWithPathCheck())
 			return this.setup();
+		this.authenticationStatus = "unknown";
 		return this.stopAgent();
 	}
 }

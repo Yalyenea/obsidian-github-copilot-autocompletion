@@ -46,16 +46,19 @@ export const inlineSuggestionField = StateField.define<InlineSuggestion | null>(
 				return inlineSuggestion.value;
 			}
 
-			if (
-				value &&
-				state.selection &&
-				cursorHasMoved(state.startState.selection, state.selection)
-			) {
-				return null;
+			if (value && !state.docChanged) {
+				if (
+					state.selection &&
+					cursorHasMoved(state.startState.selection, state.selection)
+				) {
+					return null;
+				}
+
+				return value;
 			}
 
-			if (value && !state.docChanged) {
-				return value;
+			if (value && state.docChanged) {
+				return keepSuggestionOnMatchingTyping(value, state);
 			}
 
 			return null;
@@ -197,6 +200,24 @@ export const nextSuggestion = (view: EditorView) => {
 	}
 };
 
+export const previousSuggestion = (view: EditorView) => {
+	const suggestionField = view.state.field(inlineSuggestionField);
+	if (suggestionField) {
+		const total = suggestionField.suggestions?.length || 0;
+		if (!total) {
+			return;
+		}
+
+		const previousIndex = (suggestionField.index - 1 + total) % total;
+		view.dispatch({
+			effects: InlineSuggestionEffect.of({
+				...suggestionField,
+				index: previousIndex,
+			}),
+		});
+	}
+};
+
 export const insertSuggestion = (
 	view: EditorView,
 	suggestion: string,
@@ -299,4 +320,92 @@ export function cursorHasMoved(
 		oldState.main.from !== newState.main.from ||
 		oldState.main.to !== newState.main.to
 	);
+}
+
+function getVisibleSuggestionText(
+	doc: Text,
+	cursorPos: number,
+	suggestion: CompletionWithRange,
+): string {
+	let suggestionText = suggestion.insertText;
+
+	if (suggestion.range) {
+		const [from] = convertLSPRangeToOffsets(doc, suggestion.range);
+		const existingText = doc.sliceString(from, cursorPos);
+		if (suggestionText.startsWith(existingText)) {
+			suggestionText = suggestionText.slice(existingText.length);
+		}
+	}
+
+	return suggestionText;
+}
+
+function keepSuggestionOnMatchingTyping(
+	value: InlineSuggestion,
+	transaction: Transaction,
+): InlineSuggestion | null {
+	const oldSelection = transaction.startState.selection.main;
+	const newSelection = transaction.state.selection.main;
+
+	if (!oldSelection.empty || !newSelection.empty) {
+		return null;
+	}
+
+	let insertedText = "";
+	let changeCount = 0;
+	let isSimpleInsertion = true;
+
+	transaction.changes.iterChanges((fromA, toA, fromB, toB, insert) => {
+		changeCount += 1;
+		if (
+			changeCount > 1 ||
+			fromA !== toA ||
+			fromA !== oldSelection.head ||
+			fromB !== oldSelection.head ||
+			toB !== fromB + insert.length
+		) {
+			isSimpleInsertion = false;
+			return;
+		}
+		insertedText = insert.toString();
+	});
+
+	if (!isSimpleInsertion || !insertedText || insertedText.includes("\n")) {
+		return null;
+	}
+
+	const updatedSuggestions =
+		value.suggestions
+			?.map((suggestion) => {
+				const remainingText = getVisibleSuggestionText(
+					transaction.startState.doc,
+					oldSelection.head,
+					suggestion,
+				);
+
+				if (!remainingText.startsWith(insertedText)) {
+					return null;
+				}
+
+				const nextText = remainingText.slice(insertedText.length);
+				if (!nextText) {
+					return null;
+				}
+
+				return {
+					insertText: nextText,
+				};
+			})
+			.filter((suggestion): suggestion is CompletionWithRange =>
+				Boolean(suggestion),
+			) || [];
+
+	if (!updatedSuggestions.length) {
+		return null;
+	}
+
+	return {
+		suggestions: updatedSuggestions,
+		index: Math.min(value.index, updatedSuggestions.length - 1),
+	};
 }

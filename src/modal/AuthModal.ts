@@ -54,11 +54,18 @@ class AuthModal extends Modal {
 							.confirmSignIn(this.userCode)
 							.then((res) => {
 								if (res.status === "OK") {
+									this.plugin.copilotAgent.setAuthenticationStatus(
+										"signedIn",
+									);
 									new Notice("Signed in successfully!");
 									this.plugin.copilotAgent
 										.getClient()
 										.setEditorInfo();
+									this.plugin.settingsTab.display();
 								} else {
+									this.plugin.copilotAgent.setAuthenticationStatus(
+										"signedOut",
+									);
 									new Notice(
 										"Failed to sign in: " +
 											res?.error?.message,

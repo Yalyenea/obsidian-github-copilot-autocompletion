@@ -11,7 +11,6 @@ import Logger from "../helpers/Logger";
 import File from "../helpers/File";
 import Json from "../helpers/Json";
 import Vault from "../helpers/Vault";
-import { defaultModels } from "../copilot-chat/store/slices/message";
 
 export interface SettingsObserver {
 	onSettingsUpdate(): Promise<void>;
@@ -24,20 +23,6 @@ export type Hotkeys = {
 	partial: string;
 	next: string;
 	disable: string;
-};
-
-export type CopilotChatSettings = {
-	deviceCode: string | null;
-	pat: string | null; // Personal Access Token to create the access token
-	// Access token to authenticate the user
-	accessToken: {
-		token: string | null;
-		expiresAt: number | null;
-	};
-	selectedModel?: {
-		label: string;
-		value: string;
-	};
 };
 
 export interface CopilotPluginSettings {
@@ -54,13 +39,15 @@ export interface CopilotPluginSettings {
 	deviceSpecificSettings: string[];
 	useDeviceSpecificSettings: boolean;
 	proxy: string;
-	chatSettings?: CopilotChatSettings;
-	systemPrompt: string;
-	invertEnterSendBehavior: boolean;
 	extraCACerts?: string;
-	enableMarkdownRendering: boolean;
-	openChatOnStartup: boolean;
 }
+
+const DEFAULT_ACCEPT_HOTKEY =
+	typeof navigator !== "undefined" && navigator.platform.includes("Mac")
+		? "Cmd-Enter"
+		: "Ctrl-Enter";
+const BUILT_IN_ACCEPT_HINT = "Right Arrow";
+const BUILT_IN_PARTIAL_ACCEPT_HINT = "Alt-Right";
 
 export const DEFAULT_SETTINGS: CopilotPluginSettings = {
 	nodePath: "default",
@@ -68,11 +55,11 @@ export const DEFAULT_SETTINGS: CopilotPluginSettings = {
 	nodePathUpdatedToNode22: false,
 	enabled: true,
 	hotkeys: {
-		accept: "Tab",
+		accept: "",
 		cancel: "Escape",
 		request: "Cmd-Shift-/",
-		partial: "Cmd-Shift-.",
-		next: "Cmd-Shift-ArrowDown",
+		partial: "",
+		next: "",
 		disable: "Cmd-Shift-ArrowRight",
 	},
 	suggestionDelay: 500,
@@ -83,21 +70,7 @@ export const DEFAULT_SETTINGS: CopilotPluginSettings = {
 	deviceSpecificSettings: ["nodePath"],
 	useDeviceSpecificSettings: false,
 	proxy: "",
-	chatSettings: {
-		deviceCode: null,
-		pat: null,
-		accessToken: {
-			token: null,
-			expiresAt: null,
-		},
-		selectedModel: defaultModels[4],
-	},
-	systemPrompt:
-		"You are GitHub Copilot, an AI assistant. You are helping the user with their tasks in Obsidian.",
-	invertEnterSendBehavior: false,
 	extraCACerts: "",
-	enableMarkdownRendering: true,
-	openChatOnStartup: true,
 };
 
 class CopilotPluginSettingTab extends PluginSettingTab {
@@ -201,13 +174,15 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 
 		const bindings = [
 			{
-				title: "Accept suggestion",
-				description: "Keybinding to accept copilot suggestions.",
+				title: "Optional accept hotkey",
+				description:
+					`Optional secondary keybinding to accept Copilot suggestions. ${BUILT_IN_ACCEPT_HINT} is always available and is the default primary accept action.`,
 				value: this.plugin.settings.hotkeys.accept,
 				onChange: (value: string) => {
 					this.plugin.settings.hotkeys.accept = value;
 				},
 				defaultValue: DEFAULT_SETTINGS.hotkeys.accept,
+				placeholder: BUILT_IN_ACCEPT_HINT,
 			},
 			{
 				title: "Cancel suggestion",
@@ -228,23 +203,26 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 				defaultValue: DEFAULT_SETTINGS.hotkeys.request,
 			},
 			{
-				title: "Partial acceptation",
-				description: "Keybinding to accept word per word suggestions.",
+				title: "Optional partial accept hotkey",
+				description:
+					`Optional secondary keybinding to accept suggestions word by word. ${BUILT_IN_PARTIAL_ACCEPT_HINT} is always available.`,
 				value: this.plugin.settings.hotkeys.partial,
 				onChange: (value: string) => {
 					this.plugin.settings.hotkeys.partial = value;
 				},
 				defaultValue: DEFAULT_SETTINGS.hotkeys.partial,
+				placeholder: BUILT_IN_PARTIAL_ACCEPT_HINT,
 			},
 			{
-				title: "Next suggestion",
+				title: "Optional next suggestion hotkey",
 				description:
-					"Keybinding to view the next suggestion if available.",
+					"Optional secondary keybinding to move to the next suggestion if multiple are available.",
 				value: this.plugin.settings.hotkeys.next,
 				onChange: (value: string) => {
 					this.plugin.settings.hotkeys.next = value;
 				},
 				defaultValue: DEFAULT_SETTINGS.hotkeys.next,
+				placeholder: "Alt-ArrowDown",
 			},
 			{
 				title: "Enable/Disable Copilot",
@@ -262,8 +240,11 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 			<StrictMode>
 				<h3>Keybindings</h3>
 				<p className="copilot-settings-note">
-					Be aware that not all keybindings will work as some are
-					already defined and used by other plugins.
+					The built-in inline actions are Right Arrow to accept,
+					Alt-Right to accept the next word, Alt-ArrowDown to cycle
+					forward through suggestions, Alt-ArrowUp to cycle
+					backward, and Escape to dismiss. Leave the optional fields
+					blank unless you want extra shortcuts on top of that.
 				</p>
 				{bindings.map((binding, index) => (
 					<KeybindingInput
@@ -273,6 +254,7 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 						value={binding.value}
 						onChange={binding.onChange}
 						defaultValue={binding.defaultValue}
+						placeholder={binding.placeholder}
 					/>
 				))}
 				<button
@@ -400,104 +382,35 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 					}),
 			);
 
+		new Setting(containerEl).setName("Copilot Account").setHeading();
+
+		containerEl.createEl("p", {
+			text: `Manage GitHub Copilot sign-in here. Current status: ${this.plugin.copilotAgent?.getAuthenticationStatusLabel() || "Unknown"}.`,
+			cls: "copilot-settings-note",
+		});
+
 		new Setting(containerEl)
 			.addButton((button) =>
 				button
-					.setButtonText("Restart sign-in process")
+					.setButtonText("Sign in to Copilot")
 					.setTooltip(
-						"Note that this will start the copilot service in the background.",
+						"This will start the Copilot service in the background if needed.",
 					)
 					.onClick(async () => {
-						this.needCopilotAgentEnabled(async () => {
-							this.initSignIn();
-						});
+						await this.initSignIn();
 					}),
 			)
 			.addButton((button) =>
 				button
 					.setButtonText("Sign out")
 					.setTooltip(
-						"Note that this will start the copilot service in the background.",
+						"This will start the Copilot service in the background if needed.",
 					)
 					.setWarning()
 					.onClick(async () => {
-						this.needCopilotAgentEnabled(async () => {
-							this.signOut();
-						});
+						await this.signOut();
 					}),
 			);
-
-		new Setting(containerEl).setName("Copilot Chat Settings").setHeading();
-
-		containerEl.createEl("p", {
-			text: "When authenticating in Copilot Chat, a personal token will be encrypted and stored as a file in the plugin folder. This file is called `secure-credentials.dat`. It is only decrytable by your machine but you should never share it with anyone.",
-			cls: "copilot-settings-warning",
-		});
-
-		new Setting(containerEl)
-			.setName("Open chat on startup")
-			.setDesc(
-				"Open the Copilot Chat sidebar automatically when Obsidian loads. Default is true.",
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.openChatOnStartup)
-					.onChange(async (value) => {
-						this.plugin.settings.openChatOnStartup = value;
-						await this.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Enable markdown rendering")
-			.setDesc(
-				"Enable or disable markdown rendering in chat messages. When disabled, messages will be displayed as plain text with basic formatting.",
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.enableMarkdownRendering)
-					.onChange(async (value) => {
-						this.plugin.settings.enableMarkdownRendering = value;
-						await this.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Invert Enter/Shift+Enter behavior")
-			.setDesc(
-				"When enabled, pressing Enter will create a new line and Shift+Enter will send the message. By default, Enter sends the message and Shift+Enter creates a new line.",
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.invertEnterSendBehavior)
-					.onChange(async (value) => {
-						this.plugin.settings.invertEnterSendBehavior = value;
-						await this.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("System prompt")
-			.setDesc(
-				"Configure the system prompt used for new chat conversations.",
-			)
-			.addTextArea((text) => {
-				text.inputEl.rows = 4;
-				text.inputEl.cols = 50;
-				return text
-					.setPlaceholder("Enter a system prompt for Copilot Chat.")
-					.setValue(this.plugin.settings.systemPrompt)
-					.onChange(
-						debounce(
-							async (value) => {
-								this.plugin.settings.systemPrompt = value;
-								await this.saveSettings(false, true);
-							},
-							1000,
-							true,
-						),
-					);
-			});
 	}
 
 	public hide(): void {
@@ -508,10 +421,36 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 	}
 
 	public async loadSettings() {
+		const loadedData = (await this.plugin.loadData()) || {};
+		const legacySettings = { ...loadedData };
+		delete legacySettings.chatSettings;
+		delete legacySettings.systemPrompt;
+		delete legacySettings.invertEnterSendBehavior;
+		delete legacySettings.enableMarkdownRendering;
+		delete legacySettings.openChatOnStartup;
+
+		if (legacySettings.hotkeys) {
+			if (
+				[DEFAULT_ACCEPT_HOTKEY, "Cmd-Enter", "Ctrl-Enter"].includes(
+					legacySettings.hotkeys.accept,
+				)
+			) {
+				legacySettings.hotkeys.accept = "";
+			}
+
+			if (legacySettings.hotkeys.partial === "Cmd-Shift-.") {
+				legacySettings.hotkeys.partial = "";
+			}
+
+			if (legacySettings.hotkeys.next === "Cmd-Shift-ArrowDown") {
+				legacySettings.hotkeys.next = "";
+			}
+		}
+
 		const defaultSettings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
-			await this.plugin.loadData(),
+			legacySettings,
 		);
 		if (defaultSettings.useDeviceSpecificSettings) {
 			this.plugin.settings = Object.assign(
@@ -576,24 +515,41 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 		);
 	}
 
-	private async needCopilotAgentEnabled(callback: () => void) {
+	private async ensureCopilotAgentReady(): Promise<boolean> {
 		if (!this.plugin.settings.enabled) {
 			this.plugin.settings.enabled = true;
-			await this.saveSettings(true, false).then(() => {
-				callback();
-			});
-		} else {
-			callback();
+			await this.saveSettings(true, false);
 		}
+
+		if (!(await this.isCopilotEnabledWithPathCheck())) {
+			new Notice(
+				"Configure a valid Node.js 22+ path in the plugin settings before signing in to Copilot.",
+			);
+			return false;
+		}
+
+		if (!this.plugin.copilotAgent.isReady()) {
+			await this.plugin.copilotAgent.setup();
+		}
+
+		return true;
 	}
 
 	private async initSignIn() {
+		if (!(await this.ensureCopilotAgentReady())) {
+			return;
+		}
+
 		await this.plugin.copilotAgent
 			.getClient()
 			.initiateSignIn()
 			.then((res) => {
 				if (res.status === "AlreadySignedIn") {
+					this.plugin.copilotAgent.setAuthenticationStatus(
+						"signedIn",
+					);
 					new Notice("You are already signed in.");
+					this.display();
 				} else {
 					new AuthModal(
 						this.plugin,
@@ -605,11 +561,17 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 	}
 
 	private async signOut() {
+		if (!(await this.ensureCopilotAgentReady())) {
+			return;
+		}
+
 		await this.plugin.copilotAgent
 			.getClient()
 			.signOut()
 			.then(() => {
+				this.plugin.copilotAgent.setAuthenticationStatus("signedOut");
 				new Notice("Signed out successfully.");
+				this.display();
 			});
 	}
 

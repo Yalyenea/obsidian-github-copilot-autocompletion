@@ -14,12 +14,18 @@ interface KeybindingInputProps {
 	value: string;
 	onChange: (value: string) => void;
 	defaultValue?: string;
+	placeholder?: string;
 }
 
 const KeybindingInput: React.FC<KeybindingInputProps> = (props) => {
-	const { title, description, value, onChange, defaultValue } = props;
+	const { title, description, value, onChange, defaultValue, placeholder } =
+		props;
 	const [hotkey, setHotkey] = useState(value);
 	const [keyListenerActive, setKeyListenerActive] = useState(false);
+
+	useEffect(() => {
+		setHotkey(value);
+	}, [value]);
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
@@ -77,6 +83,7 @@ const KeybindingInput: React.FC<KeybindingInputProps> = (props) => {
 				<input
 					type="text"
 					value={hotkey}
+					placeholder={placeholder}
 					onFocus={handleInputFocus}
 					onBlur={handleInputBlur}
 					readOnly
