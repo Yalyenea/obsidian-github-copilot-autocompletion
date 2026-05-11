@@ -56,6 +56,22 @@
 	line-height: 1.5;
 }
 
+.copilot-modal-auth-code {
+	display: inline-block;
+	margin: 0.25rem 0 0.75rem;
+	padding: 0.25rem 0.5rem;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+	font-family: var(--font-monospace);
+	letter-spacing: 0;
+}
+
+.copilot-modal-auth-status {
+	color: var(--text-muted);
+	font-size: 0.9rem;
+}
+
 .copilot-settings-note {
 	margin-top: 0;
 	padding-top: 0;

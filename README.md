@@ -43,6 +43,7 @@ Keep the folder name aligned with the manifest id: `github-copilot-autocomplete`
 2. Set the Node.js binary path, for example `/opt/homebrew/bin/node`.
 3. Click `Test`.
 4. Click `Sign in`.
+5. Copy the one-time code, authorize GitHub Copilot in the browser, then use `I authorized GitHub, check status` if the modal is still open.
 
 ## Controls
 

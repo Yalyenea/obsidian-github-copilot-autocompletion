@@ -443,6 +443,11 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 	}
 
 	private async ensureCopilotAgentReady(): Promise<boolean> {
+		if (!this.plugin.copilotAgent) {
+			new Notice("Copilot is still starting. Try signing in again shortly.");
+			return false;
+		}
+
 		if (!this.plugin.settings.enabled) {
 			this.plugin.settings.enabled = true;
 			await this.saveSettings(true, false);
@@ -467,25 +472,36 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 			return;
 		}
 
-		await this.plugin.copilotAgent
-			.getClient()
-			.initiateSignIn()
-			.then((res) => {
-				if (res.status === "AlreadySignedIn") {
-					this.plugin.copilotAgent.setAuthenticationStatus(
-						"signedIn",
-					);
-					new Notice("You are already signed in.");
-					this.display();
-					return;
-				}
+		try {
+			const res = await this.plugin.copilotAgent.getClient().signIn();
 
-				new AuthModal(
-					this.plugin,
-					res.userCode,
-					res.verificationUri,
-				).open();
-			});
+			if (res.status === "AlreadySignedIn") {
+				this.plugin.copilotAgent.setAuthenticationStatus("signedIn");
+				new Notice("You are already signed in.");
+				this.display();
+				return;
+			}
+
+			if (!res.userCode || !res.command) {
+				Logger.getInstance().error(
+					"Unexpected Copilot sign-in response: " +
+						JSON.stringify(res),
+				);
+				new Notice("Copilot did not return a sign-in device flow.");
+				return;
+			}
+
+			this.plugin.copilotAgent.setAuthenticationStatus("signedOut");
+			new AuthModal(
+				this.plugin,
+				res.userCode,
+				res.command,
+				res.verificationUri,
+			).open();
+		} catch (error) {
+			Logger.getInstance().error("Failed to start Copilot sign-in: " + error);
+			new Notice("Failed to start Copilot sign-in: " + error);
+		}
 	}
 
 	private async signOut(): Promise<void> {
@@ -493,14 +509,15 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 			return;
 		}
 
-		await this.plugin.copilotAgent
-			.getClient()
-			.signOut()
-			.then(() => {
-				this.plugin.copilotAgent.setAuthenticationStatus("signedOut");
-				new Notice("Signed out successfully.");
-				this.display();
-			});
+		try {
+			await this.plugin.copilotAgent.getClient().signOut();
+			this.plugin.copilotAgent.setAuthenticationStatus("signedOut");
+			new Notice("Signed out successfully.");
+			this.display();
+		} catch (error) {
+			Logger.getInstance().error("Failed to sign out of Copilot: " + error);
+			new Notice("Failed to sign out of Copilot: " + error);
+		}
 	}
 
 	private notifyObservers(): Promise<void[]> {

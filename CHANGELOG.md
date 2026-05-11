@@ -9,6 +9,7 @@
 - Fixed package license metadata to match the Apache-2.0 upstream license.
 - Added fork attribution and unofficial GitHub Copilot integration notice.
 - Changed the Obsidian plugin id to `github-copilot-autocomplete` to avoid upstream update collisions.
+- Reworked GitHub Copilot sign-in to use the official language-server device flow: `signIn` plus `workspace/executeCommand`.
 
 ## 1.3.0
 
