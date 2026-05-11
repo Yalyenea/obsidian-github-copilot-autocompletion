@@ -11,10 +11,6 @@ class Logger {
 		return Logger.instance;
 	}
 
-	getDebug(): boolean {
-		return this.isEnabled;
-	}
-
 	setDebug(isEnabled: boolean): void {
 		this.isEnabled = isEnabled;
 	}

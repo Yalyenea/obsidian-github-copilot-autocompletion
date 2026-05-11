@@ -1,26 +1,18 @@
 # Obsidian GitHub Copilot Autocomplete
 
-An Obsidian plugin fork focused on one job: GitHub Copilot inline autocompletion.
+A narrow Obsidian fork for GitHub Copilot inline autocompletion.
 
-This fork removes chat and keeps the plugin centered on editor-native completion, with input behavior tuned for Obsidian writing flows and plugins such as LaTeX Suite.
+This fork removes Copilot Chat and keeps only the editor-native completion path: start the Copilot language server, sync the current Markdown document, render ghost text, and accept suggestions with arrow-first controls.
 
-## What Changed In This Fork
+## Scope
 
-- Removed Copilot Chat and related UI, settings, and dependencies
-- Kept GitHub Copilot sign-in inside the plugin settings
-- Switched the primary accept flow away from `Tab`
-- Added editor-style inline actions:
-  - `Right Arrow` accepts the full suggestion
-  - `Alt-Right` accepts the next word
-  - `Alt-ArrowDown` and `Alt-ArrowUp` cycle through multiple suggestions
-  - `Escape` dismisses the suggestion
-- Preserved optional secondary hotkeys for users who still want custom bindings
+- Inline Copilot suggestions in Markdown editors
+- GitHub Copilot sign-in and sign-out from plugin settings
+- Node.js 22+ language-server runtime
+- Path exclusions, manual-only mode, code-block-only mode, proxy, and extra CA certificates
+- Status-bar toggle and minimal settings UI
 
-## Why
-
-In Obsidian, `Tab` is already overloaded by core editor behavior and community plugins. The most obvious conflict is formula editing with LaTeX Suite, where stealing `Tab` makes completion feel worse, not better.
-
-This fork treats inline completion as ghost text first, shortcut-driven second.
+Not included: chat, conversation history, model selection, prompt settings, markdown rendering, or React-based plugin UI.
 
 ## Requirements
 
@@ -31,87 +23,64 @@ This fork treats inline completion as ghost text first, shortcut-driven second.
 
 ## Installation
 
-### Community plugin style install
+Copy the release files into:
 
-1. Copy the plugin into your vault under:
-   `.obsidian/plugins/github-copilot`
-2. Make sure these files exist:
-   - `manifest.json`
-   - `main.js`
-   - `styles.css`
-3. Enable the plugin in Obsidian.
+```text
+.obsidian/plugins/github-copilot-autocomplete/
+```
 
-> If you install manually, keep the plugin folder name as `github-copilot`, because the current manifest id is still `github-copilot`.
+Required files:
 
-## First-Time Setup
+- `manifest.json`
+- `main.js`
+- `styles.css`
 
-1. Open the plugin settings in Obsidian.
-2. Set your Node.js binary path.
-   - Example on macOS with Homebrew: `/opt/homebrew/bin/node`
-3. Click `Test the path`.
-4. Click `Sign in to Copilot`.
+Keep the folder name aligned with the manifest id: `github-copilot-autocomplete`. This avoids collisions with the upstream `github-copilot` plugin and prevents Obsidian from treating this fork as the original plugin.
 
-If you already signed in through another Copilot client on the same machine, the plugin may detect that and skip the full device-code flow.
+## Setup
 
-## Inline Completion Behavior
+1. Open Obsidian settings for `GitHub Copilot Autocomplete`.
+2. Set the Node.js binary path, for example `/opt/homebrew/bin/node`.
+3. Click `Test`.
+4. Click `Sign in`.
 
-The built-in interaction model is:
+## Controls
 
-- `Right Arrow`: accept the visible suggestion
-- `Alt-Right`: accept the next word
+- `Right Arrow`: accept full suggestion
+- `Alt-Right`: accept next word
 - `Alt-ArrowDown`: next suggestion
 - `Alt-ArrowUp`: previous suggestion
-- `Escape`: dismiss the suggestion
+- `Escape`: dismiss suggestion
 
-When you continue typing characters that match the current suggestion prefix, the ghost text stays alive and shrinks forward instead of disappearing immediately.
-
-This is the default experience. Optional hotkeys in settings are secondary shortcuts layered on top.
-
-## Settings
-
-The plugin keeps a small settings surface:
-
-- Enable or disable Copilot
-- Node binary path
-- Suggestion delay
-- Manual-only completion mode
-- Code-block-only completion mode
-- Excluded files and folders
-- Proxy and extra CA certificates
-- Optional secondary hotkeys
-- Sign in and sign out
-
-## LaTeX Suite Compatibility
-
-This fork is intentionally designed to avoid using `Tab` as the primary accept key.
-
-That means:
-
-- LaTeX Suite can keep using `Tab` for snippet expansion
-- Obsidian can keep its normal indentation and editor behavior
-- Copilot completion remains available through arrow-based inline actions
-
-If you want to bind accept back to `Tab`, you still can, but that reintroduces the same collision this fork is trying to avoid.
+Optional hotkeys in settings are secondary bindings. `Tab` is intentionally not the primary accept key, so Obsidian indentation and LaTeX Suite snippets can keep their normal behavior.
 
 ## Development
 
+Use `just` as the command surface:
+
 ```bash
-npm install
-npm run build
+just install
+just check
+just dev
 ```
 
-Useful scripts:
+Useful recipes:
 
-- `npm run dev`: rebuild in watch mode
-- `npm run build`: type-check and build production output
+- `just check`: type-check and build production `main.js`
+- `just build`: build production `main.js`
+- `just dev`: watch build
+- `just release`: build and list release files
 
-## Project Scope
+## Release Files
 
-This fork is intentionally narrow.
+The Obsidian plugin release contains only:
 
-It is not trying to be a full Copilot surface inside Obsidian. The goal is to make inline completion feel predictable, lightweight, and compatible with real note-taking workflows.
+- `main.js`
+- `manifest.json`
+- `styles.css`
 
-## Credits
+## License And Attribution
 
-- Original project: [Pierrad/obsidian-github-copilot](https://github.com/Pierrad/obsidian-github-copilot)
-- This repository is a fork focused on autocomplete-only behavior
+This repository is a fork of [Pierrad/obsidian-github-copilot](https://github.com/Pierrad/obsidian-github-copilot). The upstream project is licensed under Apache-2.0; this fork keeps the same license. See [LICENCE.md](LICENCE.md) and [NOTICE.md](NOTICE.md).
+
+GitHub Copilot is a GitHub product. This plugin is an unofficial Obsidian integration and is not endorsed by GitHub.

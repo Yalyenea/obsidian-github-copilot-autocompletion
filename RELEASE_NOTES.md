@@ -1,3 +1,24 @@
+# Unreleased
+
+## Summary
+
+This cleanup tightens the fork around its only intended job: GitHub Copilot inline autocompletion in Obsidian.
+
+## Changes
+
+- Removed remaining chat-only CSS, Cursor rules, issue/demo assets, and repository metadata
+- Replaced the React settings components with native Obsidian settings controls
+- Removed unused runtime and type dependencies
+- Added `just` recipes for install, build, check, dev, and release checks
+- Fixed the package license field to Apache-2.0 and added fork attribution in `NOTICE.md`
+- Updated release workflow and issue templates for the autocomplete-only fork
+- Changed the plugin id to `github-copilot-autocomplete` so Obsidian updates cannot collide with the upstream plugin
+
+## Validation
+
+- Run `just check` before publishing a release
+- Release artifacts remain `main.js`, `manifest.json`, and `styles.css`
+
 # v1.3.0
 
 ## Summary
@@ -27,6 +48,6 @@ Chat has been removed. The completion flow has been rebuilt around ghost text an
 
 ## Migration Notes
 
-- The plugin id remains `github-copilot`, so existing installs, settings, and local sign-in state can still be reused
+- The plugin id is now `github-copilot-autocomplete`, so install it under `.obsidian/plugins/github-copilot-autocomplete`
 - The display name is now `GitHub Copilot Autocomplete`
 - Built-in arrow-based inline actions are now the primary interaction model

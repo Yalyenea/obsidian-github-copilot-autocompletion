@@ -1,32 +1,32 @@
 ---
-name: Bug report
-about: Create a report to help us improve
+name: Autocomplete bug
+about: Report an inline autocomplete problem
 title: ''
 labels: bug
-assignees: Pierrad
-
+assignees: ''
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**What happened**
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+**Expected autocomplete behavior**
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**Reproduction steps**
+1.
+2.
+3.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem with console logs if possible.
+**Environment**
+- OS:
+- Obsidian version:
+- Plugin version:
+- Node path:
+- Node version:
+- Copilot sign-in status:
 
-**Obsidian and environment (please complete the following information):**
- - OS: 
- - Obsidian version:
- - Plugin version [e.g. 1.0.0] : 
+**Autocomplete settings**
+- Suggestion delay:
+- Only on keybinding:
+- Only in code block:
+- Excluded path matched:
 
-**Additional context**
-Add any other context about the problem here.
+**Console logs**

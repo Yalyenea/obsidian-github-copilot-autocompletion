@@ -1,78 +1,30 @@
 ---
-globs: src/copilot/**/*.ts,src/extensions/**/*.ts,src/modal/**/*.ts
-description: Guidelines for the GitHub Copilot agent and inline suggestion system
+globs: src/copilot/**/*.ts,src/extensions/**/*.ts,src/events/**/*.ts,src/settings/**/*.ts,src/modal/**/*.ts
+description: Guidelines for the autocomplete-only GitHub Copilot language-server integration
 ---
 
-# Copilot Agent & Inline Suggestions
+# Autocomplete-Only Copilot Integration
 
-This rule covers the core copilot agent functionality and inline suggestion system.
+This fork has one product surface: GitHub Copilot inline autocomplete inside the Obsidian editor.
 
-## Architecture Overview
+## Keep
 
-The copilot agent system consists of several key components:
+- `CopilotAgent`: starts and stops the Copilot language server process.
+- `Client`: owns JSON-RPC/LSP communication.
+- `EventManager` and `EventListener`: keep the active Markdown document synced and request inline completions.
+- `InlineSuggestion*`: render ghost text, accept/cancel/cycle suggestions, and keep arrow-first keyboard behavior.
+- `CopilotPluginSettingTab` and `AuthModal`: provide Node path, performance settings, sign-in, and sign-out.
 
-- **CopilotAgent**: Main orchestrator class that manages the LSP agent process
-- **Client**: Handles LSP communication with the GitHub Copilot service  
-- **InlineSuggestionPlugin**: CodeMirror extension for rendering suggestions
-- **InlineSuggestionState**: State management for suggestions using CodeMirror effects
+## Avoid
 
-## Key Files
+- Do not add chat, conversation history, model pickers, prompt settings, markdown rendering, or React UI.
+- Do not make `Tab` the primary accept key.
+- Do not add broad compatibility shims unless the current Obsidian autocomplete path needs them.
 
-- [CopilotAgent.ts](mdc:src/copilot/CopilotAgent.ts) - Main agent class that spawns and manages the copilot process
-- [Client.ts](mdc:src/copilot/Client.ts) - LSP client for communication with GitHub Copilot
-- [InlineSuggestionPlugin.ts](mdc:src/extensions/InlineSuggestionPlugin.ts) - CodeMirror plugin for rendering suggestions
-- [InlineSuggestionState.ts](mdc:src/extensions/InlineSuggestionState.ts) - State management using CodeMirror effects
-- [AuthModal.ts](mdc:src/modal/AuthModal.ts) - Authentication modal for GitHub sign-in
+## Interaction Contract
 
-## Coding Patterns & Conventions
-
-### Class-Based Architecture
-- Use TypeScript classes for main components (CopilotAgent, Client)
-- Implement proper constructors with dependency injection
-- Use public/private access modifiers appropriately
-
-### Async/Await Pattern
-- All LSP operations should use async/await
-- Handle errors with proper try-catch blocks
-- Return Promise<void> for setup/teardown methods
-
-### LSP Communication
-- Use structured request/response patterns
-- Handle DocumentVersionMismatch and NotSignedIn states
-- Implement proper cleanup for child processes
-
-### CodeMirror Integration
-- Use ViewPlugin.fromClass for editor plugins
-- Implement proper decoration lifecycle (create, update, destroy)  
-- Use effects for state changes: `InlineSuggestionEffect.of()`
-
-### Error Handling
-- Show user-friendly notices for errors: `new Notice("Error message")`
-- Log detailed errors using Logger.getInstance()
-- Gracefully handle agent startup failures
-
-### Settings Integration
-- Implement SettingsObserver interface for configuration changes
-- Support proxy settings and custom CA certificates
-- Handle node path configuration
-
-## Example Usage
-
-```typescript
-// Triggering completions
-await agent.triggerCompletions(view, {
-    uri: fileUri,
-    position: { line: 10, character: 5 },
-    context: { triggerKind: 1 }
-});
-
-// Managing suggestions state
-view.dispatch({
-    effects: [
-        InlineSuggestionEffect.of({
-            suggestions: completions,
-            index: 0,
-        }),
-    ],
-});
-```
+- `Right Arrow`: accept full suggestion.
+- `Alt-Right`: accept next word.
+- `Alt-ArrowDown` / `Alt-ArrowUp`: cycle suggestions.
+- `Escape`: dismiss suggestion.
+- Optional configured hotkeys are secondary bindings only.

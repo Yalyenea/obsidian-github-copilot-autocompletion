@@ -86,7 +86,7 @@ export default class CopilotPlugin extends Plugin {
 		const copilotPath = Vault.getCopilotPath(this.app, this.version);
 		const zipPath = `${copilotPath}.zip`;
 
-		if (File.readFileSync(agentPath) !== "") {
+		if (File.doesFileExist(agentPath)) {
 			return;
 		}
 
@@ -110,7 +110,7 @@ export default class CopilotPlugin extends Plugin {
 			});
 		});
 
-		await File.removeOldCopilotFolders(
+		File.removeOldCopilotFolders(
 			this.version,
 			Vault.getPluginPath(this.app),
 		);

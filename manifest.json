@@ -1,10 +1,10 @@
 {
-	"id": "github-copilot",
+	"id": "github-copilot-autocomplete",
 	"name": "GitHub Copilot Autocomplete",
 	"version": "1.3.0",
 	"minAppVersion": "1.5.12",
 	"description": "GitHub Copilot inline autocompletion for Obsidian",
-	"author": "Vasseur Pierre-Adrien",
-	"authorUrl": "https://github.com/Pierrad",
+	"author": "Yalyenea",
+	"authorUrl": "https://github.com/Yalyenea",
 	"isDesktopOnly": true
 }
