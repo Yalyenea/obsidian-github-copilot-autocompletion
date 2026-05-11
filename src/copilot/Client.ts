@@ -20,6 +20,25 @@ export type CopilotResponse = {
 	result: any;
 };
 
+export type CopilotCommand = {
+	command: string;
+	title?: string;
+	arguments?: unknown[];
+};
+
+export type CopilotSignInResponse = {
+	status?: string;
+	user?: string;
+	userCode?: string;
+	verificationUri?: string;
+	expiresIn?: number;
+	interval?: number;
+	command?: CopilotCommand;
+	error?: {
+		message?: string;
+	};
+};
+
 class Client {
 	private plugin: CopilotPlugin;
 	private endpoint: JSONRPCEndpoint;
@@ -49,6 +68,9 @@ class Client {
 			capabilities: {
 				workspace: {
 					workspaceFolders: true,
+					executeCommand: {
+						dynamicRegistration: true,
+					},
 				},
 			},
 			clientInfo: {
@@ -144,13 +166,14 @@ class Client {
 		}
 	}
 
-	public async initiateSignIn(): Promise<any> {
-		return await this.client.customRequest("signInInitiate", {});
+	public async signIn(): Promise<CopilotSignInResponse> {
+		return await this.client.customRequest("signIn", {});
 	}
 
-	public async confirmSignIn(code: string): Promise<any> {
-		return await this.client.customRequest("signInConfirm", {
-			userCode: code,
+	public async executeCommand(command: CopilotCommand): Promise<unknown> {
+		return await this.client.customRequest("workspace/executeCommand", {
+			command: command.command,
+			arguments: command.arguments || [],
 		});
 	}
 

@@ -43,7 +43,6 @@ const context = await esbuild.context({
 		".noindex": "text",
 		".node": "binary",
 	},
-	jsxSideEffects: true, // Can keep 'unused' imports
 });
 
 if (prod) {

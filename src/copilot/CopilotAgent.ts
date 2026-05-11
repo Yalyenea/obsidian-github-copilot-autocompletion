@@ -52,6 +52,10 @@ class CopilotAgent implements SettingsObserver {
 		}
 	}
 
+	public isSignedIn(): boolean {
+		return this.authenticationStatus === "signedIn";
+	}
+
 	public getClient(): Client {
 		if (!this.client) {
 			new Notice("Copilot is not ready yet! Please check your settings.");

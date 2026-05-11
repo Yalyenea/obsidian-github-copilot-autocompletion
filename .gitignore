@@ -17,9 +17,8 @@ main.js
 
 # obsidian
 data.json
-device_data.json
-conversations.json
 secure-credentials.dat
+.tmp/
 
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
@@ -27,4 +26,3 @@ secure-credentials.dat
 # Exclude plugin resources
 copilot/
 copilot-*/
-!copilot-chat/

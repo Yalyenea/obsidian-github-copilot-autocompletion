@@ -1,18 +1,14 @@
-import { Notice } from "obsidian";
 import {
 	existsSync,
 	lstatSync,
 	mkdirSync,
 	readdirSync,
 	rmSync,
-	readFileSync as fsReadFileSync,
-	writeFileSync as fsWriteFileSync,
 	createWriteStream,
 	unlink,
 	unlinkSync,
 } from "fs";
 import https from "https";
-import { writeFile } from "fs/promises";
 import { join } from "path";
 import AdmZip from "adm-zip";
 import Logger from "./Logger";
@@ -22,29 +18,20 @@ class File {
 		return existsSync(path) && lstatSync(path).isDirectory();
 	}
 
+	public static doesFileExist(path: string): boolean {
+		return existsSync(path) && lstatSync(path).isFile();
+	}
+
 	public static createFolder(path: string): void {
 		if (!this.doesFolderExist(path)) {
 			mkdirSync(path, { recursive: true });
 		}
 	}
 
-	public static createFile(path: string, content: string): Promise<void> {
-		return new Promise((resolve, reject) => {
-			writeFile(path, content)
-				.then(() => {
-					resolve();
-				})
-				.catch((err) => {
-					new Notice("Error writing file: " + err);
-					reject(err);
-				});
-		});
-	}
-
-	public static async removeOldCopilotFolders(
+	public static removeOldCopilotFolders(
 		currentVersion: string,
 		path: string,
-	) {
+	): void {
 		const copilotFolders = readdirSync(path).filter((folder) =>
 			folder.startsWith("copilot"),
 		);
@@ -60,23 +47,6 @@ class File {
 
 	public static wrapFilePath(path: string): string {
 		return `"${path}"`;
-	}
-
-	public static readFileSync(path: string): string {
-		try {
-			return fsReadFileSync(path, "utf8");
-		} catch (err) {
-			console.error(`Error reading file from disk: ${err}`);
-		}
-		return "";
-	}
-
-	public static writeFileSync(path: string, content: string): void {
-		try {
-			fsWriteFileSync(path, content, "utf8");
-		} catch (err) {
-			console.error(`Error writing file to disk: ${err}`);
-		}
 	}
 
 	public static downloadFile(

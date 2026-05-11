@@ -1,6 +1,7 @@
 import { App, FileSystemAdapter } from "obsidian";
 
 class Vault {
+	public static PLUGIN_ID = "github-copilot-autocomplete";
 	public static DEFAULT_TAB_SIZE = 4;
 
 	public static getBasePath(app: App): string {
@@ -18,7 +19,7 @@ class Vault {
 	}
 
 	public static getPluginPath(app: App): string {
-		return `${this.getConfigPath(app)}/plugins/github-copilot`;
+		return `${this.getConfigPath(app)}/plugins/${this.PLUGIN_ID}`;
 	}
 
 	public static getCopilotPath(app: App, version: string): string {
