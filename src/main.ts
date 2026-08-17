@@ -21,7 +21,7 @@ export default class CopilotPlugin extends Plugin {
 	copilotAgent: CopilotAgent;
 	private cmExtensionManager: ExtensionManager;
 	private eventManager: EventManager;
-	version = "1.434.0";
+	version = "1.520.0";
 	tabSize = Vault.DEFAULT_TAB_SIZE;
 
 	async onload() {
@@ -90,6 +90,10 @@ export default class CopilotPlugin extends Plugin {
 			return;
 		}
 
+		// Remove a previous incomplete install so the next attempt can retry cleanly.
+		File.removePath(copilotPath);
+		File.removePath(zipPath);
+
 		await File.createFolder(copilotPath);
 
 		await new Promise<void>((resolve) => {
@@ -97,15 +101,33 @@ export default class CopilotPlugin extends Plugin {
 				if (err) {
 					Logger.getInstance().log(`Download failed: ${err}`);
 					new Notice(
-						"[GitHub Copilot] Failed to download the Copilot language server. Remove the empty copilot folder or retry later.",
+						"[GitHub Copilot] Failed to download the Copilot language server. Reload the plugin to retry.",
 					);
+					File.removePath(zipPath);
+					File.removePath(copilotPath);
 					resolve();
 					return;
 				}
 
 				Logger.getInstance().log("Download finished.");
-				File.unzipFile(zipPath, copilotPath);
-				File.removeFile(zipPath);
+				try {
+					File.unzipFile(zipPath, copilotPath);
+					File.removePath(zipPath);
+					if (!File.doesFileExist(agentPath)) {
+						throw new Error(
+							"language-server.js missing after unzip",
+						);
+					}
+				} catch (extractError) {
+					Logger.getInstance().log(
+						`Extract failed: ${extractError}`,
+					);
+					new Notice(
+						"[GitHub Copilot] Failed to extract the Copilot language server. Reload the plugin to retry.",
+					);
+					File.removePath(zipPath);
+					File.removePath(copilotPath);
+				}
 				resolve();
 			});
 		});

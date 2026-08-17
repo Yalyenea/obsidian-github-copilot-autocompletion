@@ -9,6 +9,10 @@ class AuthModal extends Modal {
 	private verificationUrl?: string;
 	private statusEl: HTMLElement | null = null;
 	private opening = false;
+	private refreshing = false;
+	private deviceFlowPromise: Promise<void> | null = null;
+	private closed = false;
+	private pollTimer: number | null = null;
 
 	constructor(
 		plugin: CopilotPlugin,
@@ -49,7 +53,7 @@ class AuthModal extends Modal {
 		}
 
 		this.statusEl = contentEl.createEl("p", {
-			text: "Opening GitHub sign-in...",
+			text: "Starting GitHub sign-in...",
 			cls: "copilot-modal-auth-status",
 		});
 
@@ -81,7 +85,11 @@ class AuthModal extends Modal {
 				}),
 		);
 
+		void navigator.clipboard.writeText(this.userCode).catch(() => {
+			// Clipboard may be denied; user can still copy manually.
+		});
 		void this.openSignInPage();
+		this.startStatusPolling();
 	}
 
 	private setStatus(text: string): void {
@@ -90,8 +98,22 @@ class AuthModal extends Modal {
 		}
 	}
 
+	private startStatusPolling(): void {
+		this.clearStatusPolling();
+		this.pollTimer = window.setInterval(() => {
+			void this.refreshStatus(false);
+		}, 3000);
+	}
+
+	private clearStatusPolling(): void {
+		if (this.pollTimer !== null) {
+			window.clearInterval(this.pollTimer);
+			this.pollTimer = null;
+		}
+	}
+
 	private async openSignInPage(): Promise<void> {
-		if (this.opening) {
+		if (this.opening || this.closed) {
 			return;
 		}
 
@@ -99,10 +121,41 @@ class AuthModal extends Modal {
 		this.setStatus("Opening GitHub sign-in...");
 
 		try {
-			await this.plugin.copilotAgent
-				.getClient()
-				.executeCommand(this.command);
-			await this.refreshStatus(false);
+			// Open the device page from the Obsidian process first. Relying only on
+			// the language server child process is unreliable inside Electron.
+			if (this.verificationUrl) {
+				await this.plugin.copilotAgent
+					.getClient()
+					.openExternalUrl(this.verificationUrl);
+			}
+
+			// finishDeviceFlow waits until the user completes browser auth.
+			// Keep it off the UI thread path for "check status".
+			if (!this.deviceFlowPromise) {
+				this.deviceFlowPromise = this.plugin.copilotAgent
+					.getClient()
+					.executeCommand(this.command)
+					.then(async () => {
+						if (!this.closed) {
+							await this.refreshStatus(false);
+						}
+					})
+					.catch((error) => {
+						if (!this.closed) {
+							this.setStatus(
+								"Device flow still running or failed. Use the link above, then check status.",
+							);
+							new Notice("Copilot device flow error: " + error);
+						}
+					})
+					.finally(() => {
+						this.deviceFlowPromise = null;
+					});
+			}
+
+			this.setStatus(
+				"Enter the code on GitHub, then wait or press check status.",
+			);
 		} catch (error) {
 			this.setStatus(
 				"Could not open GitHub sign-in. Use the link above, then check status.",
@@ -114,27 +167,47 @@ class AuthModal extends Modal {
 	}
 
 	private async refreshStatus(showPendingNotice = true): Promise<void> {
-		this.setStatus("Checking Copilot account status...");
-		await this.plugin.copilotAgent.refreshAuthenticationStatus();
-
-		if (this.plugin.copilotAgent.isSignedIn()) {
-			new Notice("Signed in successfully.");
-			await this.plugin.copilotAgent.getClient().setEditorInfo();
-			this.plugin.settingsTab.display();
-			this.close();
+		if (this.closed || this.refreshing) {
 			return;
 		}
 
-		this.plugin.copilotAgent.setAuthenticationStatus("signedOut");
-		this.setStatus(
-			"Still waiting for GitHub authorization. Finish the browser flow, then check again.",
-		);
-		if (showPendingNotice) {
-			new Notice("Copilot is still waiting for GitHub authorization.");
+		this.refreshing = true;
+		this.setStatus("Checking Copilot account status...");
+		try {
+			await this.plugin.copilotAgent.refreshAuthenticationStatus();
+			if (this.closed) {
+				return;
+			}
+
+			if (this.plugin.copilotAgent.isSignedIn()) {
+				this.clearStatusPolling();
+				new Notice("Signed in successfully.");
+				try {
+					await this.plugin.copilotAgent.getClient().setEditorInfo();
+				} catch {
+					// Non-fatal after successful auth.
+				}
+				if (!this.closed) {
+					this.plugin.settingsTab.display();
+					this.close();
+				}
+				return;
+			}
+
+			this.setStatus(
+				"Still waiting for GitHub authorization. Finish the browser flow, then check again.",
+			);
+			if (showPendingNotice) {
+				new Notice("Copilot is still waiting for GitHub authorization.");
+			}
+		} finally {
+			this.refreshing = false;
 		}
 	}
 
 	onClose() {
+		this.closed = true;
+		this.clearStatusPolling();
 		const { contentEl } = this;
 		contentEl.empty();
 	}

@@ -2,6 +2,7 @@ import { Editor, MarkdownFileInfo, MarkdownView, TFile } from "obsidian";
 import Cacher from "../copilot/Cacher";
 import CopilotPlugin from "../main";
 import Vault from "../helpers/Vault";
+import FileUri from "../helpers/FileUri";
 import Logger from "../helpers/Logger";
 import LSP from "../helpers/LSP";
 
@@ -14,12 +15,17 @@ class EventListener {
 
 	public async onFileOpen(file: TFile | null): Promise<void> {
 		try {
+			if (!file || !this.plugin.copilotAgent?.isReady()) {
+				return;
+			}
+
 			const basePath = Vault.getBasePath(this.plugin.app);
-			const content = await file?.vault.read(file);
+			const content = await file.vault.read(file);
+			const fileUri = FileUri.fromVaultPath(basePath, file.path);
 
 			const didOpenParams = LSP.createDidOpenParams({
-				uri: `${basePath}/${file?.path}`,
-				version: Cacher.getInstance().getCache(file?.path || ""),
+				uri: fileUri,
+				version: Cacher.getInstance().getCache(file.path || ""),
 				text: content || "",
 			});
 
@@ -27,7 +33,7 @@ class EventListener {
 				.getClient()
 				.openDocument(didOpenParams);
 
-			Cacher.getInstance().setCurrentFilePath(basePath, file?.path || "");
+			Cacher.getInstance().setCurrentFilePath(basePath, file.path || "");
 		} catch (error) {
 			Logger.getInstance().error(`Error onFileOpen: ${error}`);
 		}
@@ -38,6 +44,10 @@ class EventListener {
 		info: MarkdownView | MarkdownFileInfo,
 	): Promise<void> {
 		try {
+			if (!this.plugin.copilotAgent?.isReady()) {
+				return;
+			}
+
 			const basePath = Vault.getBasePath(this.plugin.app);
 			const cursor = editor.getCursor();
 
@@ -46,11 +56,12 @@ class EventListener {
 				return;
 			}
 
+			const fileUri = FileUri.fromVaultPath(basePath, file.path);
 			const version = Cacher.getInstance().getCache(file.path);
 			Cacher.getInstance().updateCache(file.path, version + 1);
 
 			const didChangeParams = LSP.createDidChangeParams({
-				uri: `${basePath}/${file.path}`,
+				uri: fileUri,
 				version: Cacher.getInstance().getCache(file.path),
 				text: (info as MarkdownView).data,
 			});
@@ -78,7 +89,7 @@ class EventListener {
 			}
 
 			const completionParams = LSP.createCompletionParams({
-				uri: `${basePath}/${file.path}`,
+				uri: fileUri,
 				relativePath: file.path,
 				line: cursor.line,
 				character: cursor.ch,

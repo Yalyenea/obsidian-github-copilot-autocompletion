@@ -7,9 +7,14 @@ import CopilotPlugin from "../main";
 import { SettingsObserver } from "../settings/CopilotPluginSettingTab";
 import Vault from "../helpers/Vault";
 import Logger from "../helpers/Logger";
-import Json from "../helpers/Json";
-import Client, { CopilotResponse } from "./Client";
 import File from "../helpers/File";
+import Client from "./Client";
+import {
+	AuthStatus,
+	mapCheckStatus,
+	mapStatusNotification,
+	StatusPayload,
+} from "./authStatus";
 import { GetCompletionsParams } from "@pierrad/ts-lsp-client";
 import { InlineSuggestionEffect } from "../extensions/InlineSuggestionState";
 
@@ -18,8 +23,9 @@ class CopilotAgent implements SettingsObserver {
 	private client: Client | null = null;
 	private agent: ChildProcessWithoutNullStreams | null = null;
 	private agentPath: string;
-	private authenticationStatus: "unknown" | "signedIn" | "signedOut" =
-		"unknown";
+	private authenticationStatus: AuthStatus = "unknown";
+	private setupPromise: Promise<void> | null = null;
+	private intentionalStop = false;
 
 	constructor(plugin: CopilotPlugin) {
 		this.plugin = plugin;
@@ -34,11 +40,23 @@ class CopilotAgent implements SettingsObserver {
 	}
 
 	public isReady(): boolean {
-		return !!this.agent && !!this.client;
+		return (
+			!!this.agent &&
+			!!this.client &&
+			!this.agent.killed &&
+			this.agent.exitCode === null
+		);
 	}
 
-	public setAuthenticationStatus(status: "unknown" | "signedIn" | "signedOut") {
+	public setAuthenticationStatus(status: AuthStatus) {
 		this.authenticationStatus = status;
+	}
+
+	public applyStatusNotification(payload: StatusPayload): void {
+		const next = mapStatusNotification(payload);
+		if (next) {
+			this.authenticationStatus = next;
+		}
 	}
 
 	public getAuthenticationStatusLabel(): string {
@@ -59,25 +77,52 @@ class CopilotAgent implements SettingsObserver {
 	public getClient(): Client {
 		if (!this.client) {
 			new Notice("Copilot is not ready yet! Please check your settings.");
+			throw new Error("Copilot client is not ready");
 		}
-		return this.client as Client;
+		return this.client;
 	}
 
 	public async setup(): Promise<void> {
+		if (this.setupPromise) {
+			return this.setupPromise;
+		}
+
+		this.setupPromise = this.doSetup().finally(() => {
+			this.setupPromise = null;
+		});
+		return this.setupPromise;
+	}
+
+	private async doSetup(): Promise<void> {
 		const wasReady = this.isReady();
 		await this.stopAgent();
+
+		if (!File.doesFileExist(this.plugin.settings.nodePath)) {
+			throw new Error(
+				`Node.js binary not found: ${this.plugin.settings.nodePath}`,
+			);
+		}
+		if (!File.doesFileExist(this.agentPath)) {
+			throw new Error(
+				`Copilot language server not found: ${this.agentPath}. Reload the plugin to re-download it.`,
+			);
+		}
+
 		this.startAgent();
-		this.setupListeners();
+		if (!this.agent) {
+			throw new Error("Failed to start Copilot language server process.");
+		}
+
 		await this.configureClient();
 		await this.refreshAuthenticationStatus();
 		if (!wasReady) {
 			new Notice("Copilot is ready!");
 		}
-		return Promise.resolve();
 	}
 
 	public startAgent(): void {
 		try {
+			this.intentionalStop = false;
 			const env = {
 				...process.env,
 				...(this.plugin.settings.proxy.startsWith("http://")
@@ -95,37 +140,62 @@ class CopilotAgent implements SettingsObserver {
 					: {}),
 			};
 
+			// Spawn Node directly (no shell). shell:true left orphan language-server
+			// processes that kept stdout pipes broken after reload.
 			this.agent = spawn(
-				File.wrapFilePath(this.plugin.settings.nodePath),
-				[File.wrapFilePath(this.agentPath), "--stdio"],
+				this.plugin.settings.nodePath,
+				[this.agentPath, "--stdio"],
 				{
-					shell: true,
 					stdio: "pipe",
 					env,
 				},
 			);
+
+			this.agent.stderr.on("data", (data) => {
+				Logger.getInstance().error(`stderr: ${data}`);
+			});
+
+			this.agent.on("error", (error) => {
+				Logger.getInstance().error("Agent process error: " + error);
+				if (!this.intentionalStop) {
+					new Notice("Error starting Copilot agent: " + error);
+				}
+				this.markAgentStopped();
+			});
+
+			this.agent.on("exit", (code) => {
+				Logger.getInstance().log(
+					`child process exited with code ${code}`,
+				);
+				const unexpected = !this.intentionalStop;
+				this.markAgentStopped();
+				if (unexpected) {
+					new Notice("Copilot has stopped.");
+				}
+			});
 		} catch (error) {
 			new Notice("Error starting agent: " + error);
+			this.agent = null;
 		}
+	}
+
+	private markAgentStopped(): void {
+		this.authenticationStatus = "unknown";
+		if (this.client) {
+			try {
+				this.client.dispose();
+			} catch {
+				// ignore
+			}
+			this.client = null;
+		}
+		this.agent = null;
 	}
 
 	public async refreshAuthenticationStatus(): Promise<void> {
 		try {
-			const res = await this.getClient().checkStatus();
-			const status =
-				typeof res?.status === "string"
-					? res.status
-					: typeof res?.result?.status === "string"
-						? res.result.status
-						: null;
-
-			if (status === "OK" || status === "AlreadySignedIn") {
-				this.authenticationStatus = "signedIn";
-			} else if (status === "NotSignedIn") {
-				this.authenticationStatus = "signedOut";
-			} else {
-				this.authenticationStatus = "unknown";
-			}
+			const res = (await this.getClient().checkStatus()) as StatusPayload;
+			this.authenticationStatus = mapCheckStatus(res);
 		} catch (error) {
 			Logger.getInstance().log(
 				`Failed to refresh authentication status: ${error}`,
@@ -140,68 +210,74 @@ class CopilotAgent implements SettingsObserver {
 	}
 
 	public stopAgent(): Promise<void> {
-		if (this.client) {
-			this.client.dispose();
-			this.client = null;
-		}
-		if (this.agent) {
-			this.agent.kill();
-			this.agent = null;
-		}
-		return Promise.resolve();
-	}
+		const agent = this.agent;
+		const client = this.client;
+		this.intentionalStop = true;
+		this.client = null;
+		this.agent = null;
+		this.authenticationStatus = "unknown";
 
-	public setupListeners(): void {
-		this.getAgent().stdout.on("data", (data) => {
-			Logger.getInstance().log(`stdout: ${data}`);
-			if (data.toString().includes("NotSignedIn")) {
-				this.authenticationStatus = "signedOut";
-				const jsonObjects = Json.splitJsonObjects(data.toString());
-				for (const jsonObjectString of jsonObjects) {
-					const json = Json.extractJsonObject(
-						jsonObjectString,
-					) as CopilotResponse;
-					if (json?.result?.status === "NotSignedIn") {
-						break;
+		if (client) {
+			try {
+				client.dispose();
+			} catch {
+				// ignore
+			}
+		}
+
+		if (agent && agent.exitCode === null && !agent.killed) {
+			try {
+				agent.kill("SIGTERM");
+			} catch {
+				// ignore
+			}
+			// Hard-kill if the process ignores SIGTERM.
+			setTimeout(() => {
+				if (agent.exitCode === null && !agent.killed) {
+					try {
+						agent.kill("SIGKILL");
+					} catch {
+						// ignore
 					}
 				}
-			} else if (data.toString().includes("DocumentVersionMismatch")) {
-				Logger.getInstance().log("DocumentVersionMismatch");
-			}
-		});
+			}, 1000);
+		}
 
-		this.getAgent().stderr.on("data", (data) => {
-			Logger.getInstance().error(`stderr: ${data}`);
-		});
+		// Allow unexpected-exit notices again after this stop settles.
+		setTimeout(() => {
+			this.intentionalStop = false;
+		}, 1500);
 
-		this.getAgent().on("exit", (code) => {
-			Logger.getInstance().log(`child process exited with code ${code}`);
-			this.authenticationStatus = "unknown";
-			new Notice("Copilot has stopped.");
-		});
+		return Promise.resolve();
 	}
 
 	public async triggerCompletions(
 		view: EditorView,
 		params: GetCompletionsParams,
 	): Promise<void> {
-		this.plugin.statusBar?.updateElement(true);
-		const res = await this.getClient().completion(params);
-		this.plugin.statusBar?.updateElement();
+		if (!this.isReady()) {
+			return;
+		}
 
-		if (res && res.items && res.items.length > 0) {
-			const completions = res.items.map((c) => ({
-				insertText: c.insertText,
-				range: c.range,
-			}));
-			view.dispatch({
-				effects: [
-					InlineSuggestionEffect.of({
-						suggestions: completions,
-						index: 0,
-					}),
-				],
-			});
+		this.plugin.statusBar?.updateElement(true);
+		try {
+			const res = await this.getClient().completion(params);
+			if (res && res.items && res.items.length > 0) {
+				const completions = res.items.map((c) => ({
+					insertText: c.insertText,
+					range: c.range,
+				}));
+				view.dispatch({
+					effects: [
+						InlineSuggestionEffect.of({
+							suggestions: completions,
+							index: 0,
+						}),
+					],
+				});
+			}
+		} finally {
+			this.plugin.statusBar?.updateElement();
 		}
 	}
 

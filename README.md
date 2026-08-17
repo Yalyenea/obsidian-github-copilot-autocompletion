@@ -43,7 +43,9 @@ Keep the folder name aligned with the manifest id: `github-copilot-autocomplete`
 2. Set the Node.js binary path, for example `/opt/homebrew/bin/node`.
 3. Click `Test`.
 4. Click `Sign in`.
-5. Copy the one-time code, authorize GitHub Copilot in the browser, then use `I authorized GitHub, check status` if the modal is still open.
+5. If a device-code modal appears, enter the code on GitHub (the plugin opens the browser and copies the code). Use `I authorized GitHub, check status` if needed.
+6. If local Copilot credentials already exist, status should flip to `Signed in` without a browser step.
+7. Reload the plugin (or Obsidian) after updating `main.js` if the settings UI was already open.
 
 ## Controls
 
@@ -67,10 +69,11 @@ just dev
 
 Useful recipes:
 
-- `just check`: type-check and build production `main.js`
+- `just check`: type-check, build production `main.js`, and run tests
+- `just test`: unit + language-server integration tests
 - `just build`: build production `main.js`
 - `just dev`: watch build
-- `just release`: build and list release files
+- `just release`: check then list release files
 
 ## Release Files
 

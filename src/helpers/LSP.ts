@@ -3,8 +3,16 @@ import {
 	DidOpenTextDocumentParams,
 	GetCompletionsParams,
 } from "@pierrad/ts-lsp-client";
+import FileUri from "./FileUri";
 
 class LSP {
+	private static asFileUri(uriOrPath: string): string {
+		if (uriOrPath.startsWith("file:")) {
+			return uriOrPath;
+		}
+		return FileUri.fromAbsolutePath(uriOrPath);
+	}
+
 	public static createDidOpenParams(args: {
 		uri: string;
 		version: number;
@@ -12,7 +20,7 @@ class LSP {
 	}): DidOpenTextDocumentParams {
 		return {
 			textDocument: {
-				uri: "file://" + args.uri,
+				uri: this.asFileUri(args.uri),
 				languageId: "markdown",
 				version: args.version,
 				text: args.text,
@@ -27,7 +35,7 @@ class LSP {
 	}): DidChangeTextDocumentParams {
 		return {
 			textDocument: {
-				uri: "file://" + args.uri,
+				uri: this.asFileUri(args.uri),
 				version: args.version,
 			},
 			contentChanges: [
@@ -48,7 +56,7 @@ class LSP {
 	}): GetCompletionsParams {
 		return {
 			textDocument: {
-				uri: "file://" + args.uri,
+				uri: this.asFileUri(args.uri),
 				version: args.version,
 			},
 			position: {

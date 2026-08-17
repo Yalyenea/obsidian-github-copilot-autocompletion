@@ -1,6 +1,6 @@
 import {
 	existsSync,
-	lstatSync,
+	statSync,
 	mkdirSync,
 	readdirSync,
 	rmSync,
@@ -15,11 +15,21 @@ import Logger from "./Logger";
 
 class File {
 	public static doesFolderExist(path: string): boolean {
-		return existsSync(path) && lstatSync(path).isDirectory();
+		try {
+			// stat follows symlinks (Homebrew paths are often linked).
+			return existsSync(path) && statSync(path).isDirectory();
+		} catch {
+			return false;
+		}
 	}
 
 	public static doesFileExist(path: string): boolean {
-		return existsSync(path) && lstatSync(path).isFile();
+		try {
+			// stat follows symlinks so /opt/homebrew/bin/node resolves correctly.
+			return existsSync(path) && statSync(path).isFile();
+		} catch {
+			return false;
+		}
 	}
 
 	public static createFolder(path: string): void {
@@ -92,6 +102,13 @@ class File {
 
 	public static removeFile(path: string) {
 		unlinkSync(path);
+	}
+
+	public static removePath(path: string): void {
+		if (!existsSync(path)) {
+			return;
+		}
+		rmSync(path, { recursive: true, force: true });
 	}
 }
 

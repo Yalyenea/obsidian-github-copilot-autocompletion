@@ -461,23 +461,52 @@ class CopilotPluginSettingTab extends PluginSettingTab {
 		}
 
 		if (!this.plugin.copilotAgent.isReady()) {
-			await this.plugin.copilotAgent.setup();
+			new Notice("Starting Copilot service...");
+			try {
+				await this.plugin.copilotAgent.setup();
+			} catch (error) {
+				Logger.getInstance().error(
+					"Failed to start Copilot service: " + error,
+				);
+				new Notice("Failed to start Copilot service: " + error);
+				return false;
+			}
+		}
+
+		if (!this.plugin.copilotAgent.isReady()) {
+			new Notice(
+				"Copilot service is not ready. Check the Node.js path and developer console.",
+			);
+			return false;
 		}
 
 		return true;
 	}
 
 	private async initSignIn(): Promise<void> {
+		new Notice("Starting Copilot sign-in...");
 		if (!(await this.ensureCopilotAgentReady())) {
 			return;
 		}
 
 		try {
+			// Prefer already-valid local credentials before opening a device flow.
+			await this.plugin.copilotAgent.refreshAuthenticationStatus();
+			if (this.plugin.copilotAgent.isSignedIn()) {
+				new Notice("You are already signed in.");
+				this.display();
+				return;
+			}
+
 			const res = await this.plugin.copilotAgent.getClient().signIn();
 
-			if (res.status === "AlreadySignedIn") {
+			if (res.status === "AlreadySignedIn" || res.status === "OK") {
 				this.plugin.copilotAgent.setAuthenticationStatus("signedIn");
-				new Notice("You are already signed in.");
+				new Notice(
+					res.user
+						? `Signed in as ${res.user}.`
+						: "You are already signed in.",
+				);
 				this.display();
 				return;
 			}

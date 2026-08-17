@@ -1,6 +1,7 @@
 import {
 	Debouncer,
 	Editor,
+	EventRef,
 	MarkdownFileInfo,
 	MarkdownView,
 	TFile,
@@ -16,7 +17,15 @@ class EventManager implements SettingsObserver {
 	private plugin: CopilotPlugin;
 	private eventListener: EventListener;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	private debouncedEditorChangeHandler: Debouncer<any, any>;
+	private debouncedEditorChangeHandler: Debouncer<any, any> | null = null;
+	private eventRefs: EventRef[] = [];
+	private unloadRegistered = false;
+
+	private fileOpenHandler = async (file: TFile | null): Promise<void> => {
+		if (this.canRegisterEvent(file)) {
+			await this.eventListener.onFileOpen(file);
+		}
+	};
 
 	constructor(plugin: CopilotPlugin) {
 		this.plugin = plugin;
@@ -25,27 +34,33 @@ class EventManager implements SettingsObserver {
 	}
 
 	public registerEvents(): void {
-		this.plugin.registerEvent(
-			this.plugin.app.workspace.on("file-open", async (file: TFile) => {
-				if (await this.canRegisterEvent(file)) {
-					this.eventListener.onFileOpen(file);
-				}
-			}),
+		// Ensure plugin unload always detaches our dynamic listeners once.
+		if (!this.unloadRegistered) {
+			this.plugin.register(() => this.unRegisterEvents());
+			this.unloadRegistered = true;
+		}
+
+		this.unRegisterEvents();
+
+		this.eventRefs.push(
+			this.plugin.app.workspace.on("file-open", this.fileOpenHandler),
 		);
 
-		if (this.plugin.settings.onlyOnHotkey) return; // do not register editor change event if onlyOnHotkey is enabled
+		if (this.plugin.settings.onlyOnHotkey) {
+			return;
+		}
 
 		this.debouncedEditorChangeHandler = debounce(
 			async (editor: Editor, info: MarkdownView | MarkdownFileInfo) => {
-				if (await this.canRegisterEvent(info?.file as TFile)) {
-					this.eventListener.onEditorChange(editor, info);
+				if (this.canRegisterEvent(info?.file as TFile)) {
+					await this.eventListener.onEditorChange(editor, info);
 				}
 			},
 			this.plugin.settings.suggestionDelay,
 			true,
 		);
 
-		this.plugin.registerEvent(
+		this.eventRefs.push(
 			this.plugin.app.workspace.on(
 				"editor-change",
 				this.debouncedEditorChangeHandler,
@@ -54,21 +69,19 @@ class EventManager implements SettingsObserver {
 	}
 
 	public unRegisterEvents(): void {
-		this.plugin.app.workspace.off("file-open", this.fileOpenHandler);
-		this.plugin.app.workspace.off(
-			"editor-change",
-			this.debouncedEditorChangeHandler,
-		);
+		for (const ref of this.eventRefs) {
+			this.plugin.app.workspace.offref(ref);
+		}
+		this.eventRefs = [];
+		this.debouncedEditorChangeHandler = null;
 	}
 
-	private fileOpenHandler = async (file: TFile | null): Promise<void> => {
-		await this.eventListener.onFileOpen(file);
-	};
-
-	// Only register event if copilot is enabled and file is not excluded
-	private async canRegisterEvent(file: TFile): Promise<boolean> {
+	// Hot path: do not re-spawn Node to re-test the binary on every keystroke.
+	// Agent readiness already implies a successful path check + setup.
+	private canRegisterEvent(file: TFile | null): boolean {
 		return (
-			(await this.plugin.settingsTab.isCopilotEnabledWithPathCheck()) &&
+			this.plugin.settingsTab.isCopilotEnabled() &&
+			!!this.plugin.copilotAgent?.isReady() &&
 			!Vault.isFileExcluded(
 				file?.path as string,
 				this.plugin.settings.exclude,
@@ -77,7 +90,6 @@ class EventManager implements SettingsObserver {
 	}
 
 	onSettingsUpdate(): Promise<void> {
-		this.unRegisterEvents();
 		this.registerEvents();
 		return Promise.resolve();
 	}

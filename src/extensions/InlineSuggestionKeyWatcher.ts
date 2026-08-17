@@ -14,6 +14,7 @@ import {
 import { Hotkeys } from "../settings/CopilotPluginSettingTab";
 import Cacher from "../copilot/Cacher";
 import CopilotAgent from "../copilot/CopilotAgent";
+import FileUri from "../helpers/FileUri";
 import LSP from "../helpers/LSP";
 import CopilotPlugin from "../main";
 
@@ -255,11 +256,11 @@ function requestSuggestion(
 	agent: CopilotAgent,
 	plugin: CopilotPlugin,
 ): void {
+	const current = Cacher.getInstance().getCurrentFilePath();
+	const fileUri = FileUri.fromVaultPath(current.basePath, current.filePath);
 	const didChangeParams = LSP.createDidChangeParams({
-		uri: `${Cacher.getInstance().getCurrentFilePath().basePath}/${Cacher.getInstance().getCurrentFilePath().filePath}`,
-		version: Cacher.getInstance().getCache(
-			Cacher.getInstance().getCurrentFilePath().filePath,
-		),
+		uri: fileUri,
+		version: Cacher.getInstance().getCache(current.filePath),
 		text: view.state.doc.toString(),
 	});
 
@@ -272,14 +273,11 @@ function requestSuggestion(
 				view.state.selection.main.head,
 			);
 			const completionParams = LSP.createCompletionParams({
-				uri: `${Cacher.getInstance().getCurrentFilePath().basePath}/${Cacher.getInstance().getCurrentFilePath().filePath}`,
-				relativePath:
-					Cacher.getInstance().getCurrentFilePath().filePath,
+				uri: fileUri,
+				relativePath: current.filePath,
 				line: cursor.line,
 				character: cursor.ch,
-				version: Cacher.getInstance().getCache(
-					Cacher.getInstance().getCurrentFilePath().filePath,
-				),
+				version: Cacher.getInstance().getCache(current.filePath),
 				indentSize: plugin.tabSize,
 			});
 

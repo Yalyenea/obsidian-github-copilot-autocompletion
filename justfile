@@ -11,9 +11,11 @@ dev:
 build:
     npm run build
 
-check:
-    npm run build
+test:
+    node esbuild.tests.mjs
+    node .tmp/tests.js
 
-release:
-    npm run build
+check: build test
+
+release: check
     ls -lh main.js manifest.json styles.css

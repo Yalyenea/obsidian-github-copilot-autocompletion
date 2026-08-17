@@ -24,5 +24,5 @@ secure-credentials.dat
 .DS_Store
 
 # Exclude plugin resources
-copilot/
-copilot-*/
+/copilot/
+/copilot-*/

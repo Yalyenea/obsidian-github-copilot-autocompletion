@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Fixed Node path detection treating Homebrew symlinks (e.g. `/opt/homebrew/bin/node`) as missing.
+- Encoded `file://` URIs for vault paths with spaces/non-ASCII characters.
+- Upgraded Copilot language server to `1.520.0`.
+- Handle `workspace/configuration` and push `workspace/didChangeConfiguration` (proxy/telemetry).
+- Apply auth state from `didChangeStatus` / `statusNotification` notifications.
+- Rebind workspace events via `EventRef` + `offref` without `registerEvent` leaks.
+- Added unit/integration tests (`just test`).
+- Hardened runtime after the sign-in fix: JSON-RPC request timeouts, GitHub-only external URL open, completion error handling, agent path preflight, incomplete language-server download cleanup, event listener unregister, and no Node re-test on every keystroke.
+- Fixed Copilot sign-in hanging with no UI feedback: replaced the broken JSON-RPC id matcher, handle `window/showDocument`, open the device URL from Obsidian, and stop leaving orphan language-server processes after `shell:true` kills.
+- Sign-in now reuses existing local Copilot credentials when already authenticated, polls status while waiting, and reports startup failures instead of doing nothing.
 - Removed remaining Copilot Chat styles, rules, demo assets, and metadata.
 - Rebuilt the settings tab with Obsidian native controls and removed React from the runtime dependency surface.
 - Removed unused dependencies and assets: `react`, `react-dom`, `extract-zip`, `@types/react`, `@types/react-dom`, `@types/lodash`, and unused status icons.
