@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.1
 
 - Fixed Node path detection treating Homebrew symlinks (e.g. `/opt/homebrew/bin/node`) as missing.
 - Encoded `file://` URIs for vault paths with spaces/non-ASCII characters.
