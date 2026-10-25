@@ -1,11 +1,16 @@
-# Unreleased
+# v1.3.1
 
 ## Summary
 
-This cleanup tightens the fork around its only intended job: GitHub Copilot inline autocompletion in Obsidian.
+This release fixes Copilot sign-in and language-server lifecycle handling, and simplifies the Obsidian settings interface.
 
 ## Changes
 
+- Fixed stalled sign-in, reused existing credentials, and surfaced startup failures
+- Fixed JSON-RPC response matching, added request timeouts, and cleaned up language-server processes on shutdown
+- Fixed Homebrew Node symlink detection and file URIs containing spaces or non-ASCII characters
+- Updated the Copilot language server to `1.520.0` and synchronized configuration and authentication notifications
+- Fixed workspace event cleanup and completion error handling
 - Removed remaining chat-only CSS, Cursor rules, issue/demo assets, and repository metadata
 - Replaced the React settings components with native Obsidian settings controls
 - Removed unused runtime and type dependencies
@@ -14,10 +19,10 @@ This cleanup tightens the fork around its only intended job: GitHub Copilot inli
 - Updated release workflow and issue templates for the autocomplete-only fork
 - Changed the plugin id to `github-copilot-autocomplete` so Obsidian updates cannot collide with the upstream plugin
 
-## Validation
+## Upgrade
 
-- Run `just check` before publishing a release
-- Release artifacts remain `main.js`, `manifest.json`, and `styles.css`
+- The plugin ID changed from `github-copilot` to `github-copilot-autocomplete`. Install this release in `.obsidian/plugins/github-copilot-autocomplete` and disable the old plugin to avoid duplicate completions.
+- Download `main.js`, `manifest.json`, and `styles.css` from the release assets into that directory, then reload Obsidian and enable GitHub Copilot Autocomplete.
 
 # v1.3.0
 
