@@ -23,7 +23,19 @@ Not included: chat, conversation history, model selection, prompt settings, mark
 
 ## Installation
 
-Copy the release files into:
+### Install with BRAT
+
+1. Install and enable **BRAT** from Obsidian's community plugins.
+2. Open BRAT settings and click **Add beta plugin**.
+3. Enter `https://github.com/Yalyenea/obsidian-github-copilot-autocompletion` as the repository URL.
+4. Select **Latest**, add the plugin, and enable **GitHub Copilot Autocomplete**.
+5. Follow the [setup instructions](#setup) to configure Node.js and sign in to GitHub Copilot.
+
+BRAT can install future releases through its plugin update commands. If the original **GitHub Copilot** plugin is enabled, disable it to avoid duplicate completions.
+
+### Manual installation
+
+Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Yalyenea/obsidian-github-copilot-autocompletion/releases/latest) and copy them into:
 
 ```text
 .obsidian/plugins/github-copilot-autocomplete/
